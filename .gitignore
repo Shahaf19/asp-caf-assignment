@@ -12,3 +12,5 @@ assignment/artifacts/*
 !assignment/artifacts/asp26-assignment1.pdf
 
 coverage
+
+.envrc

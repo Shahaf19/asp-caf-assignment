@@ -173,7 +173,7 @@ asp-caf-assignment/
 - `make run` - Start development container
 - `make attach` - Connect to running container
 - `make stop` - Stop running container
-- `make deploy/deploy_libcaf/deploy_caf` - Install libcaf and caf packages, or both
+- `make deploy/deploy-libcaf/deploy-caf` - Install libcaf and caf packages, or both
 - `make test` - Run complete test suite (use `ENABLE_COVERAGE=1` to collect coverage information)
 - `make clean` - Remove build artifacts
 

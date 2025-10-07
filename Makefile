@@ -9,7 +9,7 @@ ENABLE_COVERAGE ?= 0
 build-container:
 	@if [ -z "$$(docker images -q $(IMAGE_NAME))" ]; then \
 		echo "🚀 Building Docker image: $(IMAGE_NAME)"; \
-		docker buildx build -t $(IMAGE_NAME) .; \
+		docker buildx build -f deployment/Dockerfile -t $(IMAGE_NAME) .; \
 	else \
 		echo "✅ Docker image $(IMAGE_NAME) already exists."; \
 	fi
@@ -37,18 +37,34 @@ stop:
 	@echo "🛑 Stopping container: $(CONTAINER_NAME)"
 	@docker stop $(CONTAINER_NAME) 2>/dev/null || true
 
+# === Coverage Control ===
+
+enable-coverage:
+	@echo "🔄 Enabling coverage..."
+	@sed -i.bak 's/^export ENABLE_COVERAGE=.*/export ENABLE_COVERAGE=1/' .envrc && rm -f .envrc.bak
+	@direnv allow
+	@echo "✅ Coverage enabled!"
+	@echo "Then run 'make test' to run tests with coverage."
+
+disable-coverage:
+	@echo "🔄 Disabling coverage..."
+	@sed -i.bak 's/^export ENABLE_COVERAGE=.*/export ENABLE_COVERAGE=0/' .envrc && rm -f .envrc.bak
+	@direnv allow
+	@echo "✅ Coverage disabled!"
+	@echo "Then run 'make test' to run tests without coverage."
+
 # === Build & Install ===
 
-deploy_libcaf:
+deploy-libcaf:
 	@echo "📦 Deploying libcaf library..."
 	cd libcaf && CMAKE_ARGS="-DENABLE_COVERAGE=$(ENABLE_COVERAGE)" pip install --no-build-isolation -v -e . \
 	&& cd .. && pybind11-stubgen _libcaf -o libcaf
 
-deploy_caf:
+deploy-caf:
 	@echo "📦 Deploying caf CLI..."
 	pip install -e caf
 
-deploy: deploy_libcaf deploy_caf
+deploy: deploy-libcaf deploy-caf
 	@echo "✅ Deployment complete!"
 
 # === Testing ===
@@ -73,12 +89,12 @@ endif
 
 # === Utility ===
 
-clean_coverage:
+clean-coverage:
 	rm -f libcaf/*.gcda
 	rm -rf tests/.coverage
 	rm -r coverage
 
-clean: clean_coverage
+clean: clean-coverage
 	rm -rf libcaf/libcaf.egg-info libcaf/*.so libcaf/build
 	rm -rf caf/caf.egg-info
 
@@ -89,22 +105,23 @@ help:
 	@echo "  attach                  - Attach to the running Docker container"
 	@echo "  stop                    - Stop the Docker container"
 	@echo ""
-	@echo "  develop                 - Compile with coverage flags if enabled"
-	@echo "  deploy_libcaf           - Install libcaf in editable mode"
-	@echo "  deploy_caf              - Install caf in editable mode"
+	@echo "  enable-coverage         - Enable coverage collection"
+	@echo "  disable-coverage        - Disable coverage collection"
+	@echo ""
+	@echo "  deploy-libcaf           - Install libcaf in editable mode"
+	@echo "  deploy-caf              - Install caf in editable mode"
 	@echo "  deploy                  - Install both components"
 	@echo ""
 	@echo "  test                    - Run all tests (Python + C++ coverage if enabled)"
 	@echo ""
-	@echo "  clean_coverage          - Remove coverage files"
+	@echo "  clean-coverage          - Remove coverage files"
 	@echo "  clean                   - Remove build artifacts"
 	@echo ""
-	@echo "Options:"
-	@echo "  ENABLE_COVERAGE=1          - Enable C++ coverage (default: 0)"
-	@echo "  Example: make test ENABLE_COVERAGE=1"
+	@echo "Current environment variables:"
+	@echo "  ENABLE_COVERAGE         = $(ENABLE_COVERAGE)"
 
 .PHONY: \
 	build-container run attach stop \
-	develop deploy deploy_libcaf deploy_caf \
+	deploy deploy-libcaf deploy-caf \
 	test \
-	clean_coverage clean help
+	clean-coverage clean help

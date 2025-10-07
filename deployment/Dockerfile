@@ -12,7 +12,7 @@ RUN echo "🌟 Welcome to the CAF Development Environment! 🌟" && \
 # Install necessary packages
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-    bash-completion \
+    bash-completion direnv \
     gcc g++ make cmake ninja-build git \
     python3 python3-dev python3-pip python3-venv \
     libssl-dev libssl3 \
@@ -32,8 +32,15 @@ RUN /venv/bin/pip install --upgrade pip && \
 # Set the virtual environment as the default Python environment
 ENV PATH="/venv/bin:$PATH"
 
-# Activate venv in shell sessions (shows (venv) prefix)
-RUN echo 'source /venv/bin/activate' >> /root/.bashrc
+# Configure shell to use direnv and set up environment initialization
+RUN echo 'source /venv/bin/activate' >> /root/.bashrc && \
+    echo 'eval "$(direnv hook bash)"' >> /root/.bashrc && \
+    echo '' >> /root/.bashrc && \
+    echo 'cd /workspace' >> /root/.bashrc && \
+    echo 'if [ ! -f .envrc ]; then' >> /root/.bashrc && \
+    echo '    cp deployment/.envrc.default .envrc' >> /root/.bashrc && \
+    echo '    direnv allow' >> /root/.bashrc && \
+    echo 'fi' >> /root/.bashrc
 
 # Add a final message
 RUN echo "🎉 Setup complete! Happy coding! 🎉"

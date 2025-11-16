@@ -285,7 +285,7 @@ def create_tag(**kwargs) -> int:
     if not tag_name:
         _print_error('Tag name is required.')
         return -1
-
+    
     try:
         repo.create_tag(tag_name, commit_hash)
         _print_success(f'Tag "{tag_name}" created.')

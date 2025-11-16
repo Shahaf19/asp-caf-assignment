@@ -164,7 +164,7 @@ def cli() -> None:
                 'commit_hash': {
                     'type': str,
                     'help': '📌 Commit hash to tag',
-                    'default': None,
+                    'default': 'HEAD',
                 },
             },
             'help': '🏷️  Create a new tag',

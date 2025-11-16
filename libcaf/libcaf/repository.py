@@ -9,7 +9,7 @@ from functools import wraps
 from pathlib import Path
 from typing import Concatenate
 
-from . import Blob, Commit, Tree, TreeRecord, TreeRecordType
+from . import Blob, Commit, Tag, Tree, TreeRecord, TreeRecordType
 from .constants import (DEFAULT_BRANCH, DEFAULT_REPO_DIR, HASH_CHARSET, HASH_LENGTH, HEADS_DIR, HEAD_FILE,
                         OBJECTS_SUBDIR, REFS_DIR, TAGS_DIR)
 from .plumbing import hash_object, load_commit, load_tree, save_commit, save_file_content, save_tree
@@ -324,7 +324,7 @@ class Repository:
         return [x.name for x in self.heads_dir().iterdir()]
 
     @requires_repo
-    def create_tag(self, tag_name: str, commit_ref: Ref | None = None) -> None:
+    def create_tag(self, tag_name: str, commit_ref: Ref) -> None:
         """Create a tag pointing to a commit.
 
         :param tag_name: The name of the tag to create.
@@ -341,7 +341,7 @@ class Repository:
             raise RepositoryError(msg)
         
         # Resolve commit_ref - use HEAD if not provided
-        if commit_ref is None:
+        if commit_ref == 'HEAD':
             commit_ref = self.head_commit()
             if commit_ref is None:
                 msg = 'Cannot create tag: HEAD has no commit'
@@ -349,9 +349,6 @@ class Repository:
         
         # Resolve reference to hash
         resolved_hash = self.resolve_ref(commit_ref)
-        if resolved_hash is None:
-            msg = f'Invalid reference: {commit_ref}'
-            raise RepositoryError(msg)
         
         # Create tag file with commit hash
         tag_path = self.tags_dir() / tag_name
@@ -384,15 +381,22 @@ class Repository:
         return (self.tags_dir() / tag_name).exists()
 
     @requires_repo
-    def tags(self) -> list[str]:
-        """Get a list of all tag names in the repository.
+    def tags(self) -> list[Tag]:
+        """Get a list of all tags in the repository.
 
-        :return: A list of tag names.
+        :return: A list of Tag objects.
         :raises RepositoryNotFoundError: If the repository does not exist."""
         tags_dir = self.tags_dir()
         if not tags_dir.exists():
             return []
-        return [x.name for x in tags_dir.iterdir()]
+        
+        tag_objects = []
+        for tag_file in tags_dir.iterdir():
+            tag_name = tag_file.name
+            commit_hash = read_ref(tag_file)
+            tag_objects.append(Tag(tag_name, commit_hash))
+        
+        return tag_objects
 
     @requires_repo
     def save_dir(self, path: Path) -> HashRef:

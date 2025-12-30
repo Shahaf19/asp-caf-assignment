@@ -8,9 +8,9 @@ from pathlib import Path
 
 
 def test_common_ancestor_same_commit(temp_repo: Repository) -> None:
-    if temp_repo.exists():
-        temp_repo.delete_repo()
-    temp_repo.init()
+    # if temp_repo.exists():
+    #     temp_repo.delete_repo()
+    # temp_repo.init()
     temp_file = temp_repo.working_dir / 'file.txt'
     temp_file.write_text('content')
     c1 = temp_repo.commit_working_dir('Author', 'Commit 1')
@@ -18,9 +18,9 @@ def test_common_ancestor_same_commit(temp_repo: Repository) -> None:
     assert temp_repo.get_common_ancestor(c1, c1) == c1
 
 def test_common_ancestor_parent_child(temp_repo: Repository) -> None:
-    if temp_repo.exists():
-        temp_repo.delete_repo()
-    temp_repo.init()
+    # if temp_repo.exists():
+    #     temp_repo.delete_repo()
+    # temp_repo.init()
     temp_file = temp_repo.working_dir / 'file.txt'
     
     temp_file.write_text('v1')
@@ -33,9 +33,9 @@ def test_common_ancestor_parent_child(temp_repo: Repository) -> None:
     assert temp_repo.get_common_ancestor(c2, c1) == c1
 
 def test_common_ancestor_diverged(temp_repo: Repository) -> None:
-    if temp_repo.exists():
-        temp_repo.delete_repo()
-    temp_repo.init()
+    # if temp_repo.exists():
+    #     temp_repo.delete_repo()
+    # temp_repo.init()
     temp_file = temp_repo.working_dir / 'file.txt'
 
     temp_file.write_text('base')
@@ -52,9 +52,9 @@ def test_common_ancestor_diverged(temp_repo: Repository) -> None:
     assert temp_repo.get_common_ancestor(c1, c2) == base
 
 def test_common_ancestor_no_common(temp_repo: Repository) -> None:
-    if temp_repo.exists():
-        temp_repo.delete_repo()
-    temp_repo.init()
+    # if temp_repo.exists():
+    #     temp_repo.delete_repo()
+    # temp_repo.init()
 
     (temp_repo.working_dir / "a.txt").write_text("a")
     c1 = temp_repo.commit_working_dir("Author", "1")

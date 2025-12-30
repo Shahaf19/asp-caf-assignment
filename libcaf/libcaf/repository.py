@@ -630,61 +630,53 @@ class Repository:
         :return: The hash of the common ancestor, or None if no common ancestor is found.
         :raises RepositoryError: If there is an error loading commits.
         """
-        queue1 = deque([hash1])
-        queue2 = deque([hash2])
-        visited1 = {hash1}
-        visited2 = {hash2}
+        if hash1 == hash2:
+            return hash1
 
-        while queue1 or queue2:
-            # Process queue1
-            if queue1:
-                current1 = queue1.popleft()
-                if current1 in visited2:
-                    return current1
-                
-                try:
-                    commit1 = load_commit(self.objects_dir(), current1)
-                    parents = commit1.parent
-                    if parents is None:
-                        parents = []
-                    elif isinstance(parents, str):
-                        parents = [parents]
+        queues = {1: deque([hash1]), 2: deque([hash2])}
+        visited = {1: {hash1}, 2: {hash2}}
+        parents_cache: dict[str, list[str]] = {}
 
-                    for parent in parents:
-                        if parent not in visited1:
-                            visited1.add(parent)
-                            queue1.append(parent)
-                except RepositoryError:
-                    raise
-                except Exception as e:
-                    raise RepositoryError(
-                        f"Corrupted commit object: {current1}"
-                    ) from e
+        def _load_parents(h: str) -> list[str]:
+            if h in parents_cache:
+                return parents_cache[h]
+            try:
+                commit = load_commit(self.objects_dir(), h)
+                p = commit.parent
+                if p is None:
+                    parents = []
+                elif isinstance(p, str):
+                    parents = [p]
+                else:
+                    parents = list(p)
+                parents_cache[h] = parents
+                return parents
+            # except RepositoryError:
+            #     raise
+            except Exception as e:
+                raise RepositoryError(f"Corrupted commit object: {h}") from e
 
-            # Process queue2
-            if queue2:
-                current2 = queue2.popleft()
-                if current2 in visited1:
-                    return current2
-                
-                try:
-                    commit2 = load_commit(self.objects_dir(), current2)
-                    parents = commit2.parent
-                    if parents is None:
-                        parents = []
-                    elif isinstance(parents, str):
-                        parents = [parents]
+        while queues[1] or queues[2]:
+            side = 1 if (queues[1] and (not queues[2] or len(queues[1]) <= len(queues[2]))) else 2
+            if not queues[side]:
+                # other side still has work
+                side = 3 - side
+                if not queues[side]:
+                    break
 
-                    for parent in parents:
-                        if parent not in visited2:
-                            visited2.add(parent)
-                            queue2.append(parent)
-                except RepositoryError:
-                    raise
-                except Exception as e:
-                    raise RepositoryError(
-                        f"Corrupted commit object: {current2}"
-                    ) from e
+            current = queues[side].popleft()
+
+            # immediate meeting check (covers case where initial hashes overlap)
+            if current in visited[3 - side]:
+                return current
+
+            for parent in _load_parents(current):
+                if parent in visited[3 - side]:
+                    return parent
+                if parent not in visited[side]:
+                    visited[side].add(parent)
+                    queues[side].append(parent)
+
         return None
 
     def head_file(self) -> Path:

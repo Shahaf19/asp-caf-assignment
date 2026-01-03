@@ -623,7 +623,7 @@ class Repository:
     @requires_repo
     def get_common_ancestor(self, hash1: str, hash2: str) -> str | None:
         """
-        Find the lowest common ancestor (LCA) of two commits using a parallel BFS approach.
+        Find the lowest common ancestor (LCA) of two commits.
 
         :param hash1: The hash of the first commit.
         :param hash2: The hash of the second commit.
@@ -633,49 +633,50 @@ class Repository:
         if hash1 == hash2:
             return hash1
 
-        queues = {1: deque([hash1]), 2: deque([hash2])}
-        visited = {1: {hash1}, 2: {hash2}}
-        parents_cache: dict[str, list[str]] = {}
+        # 1. Collect all ancestors of hash1
+        ancestors1 = {hash1}
+        queue1 = deque([hash1])
 
-        def _load_parents(h: str) -> list[str]:
-            if h in parents_cache:
-                return parents_cache[h]
-            try:
-                commit = load_commit(self.objects_dir(), h)
-                p = commit.parent
-                if p is None:
-                    parents = []
-                elif isinstance(p, str):
-                    parents = [p]
-                else:
-                    parents = list(p)
-                parents_cache[h] = parents
-                return parents
-            # except RepositoryError:
-            #     raise
-            except Exception as e:
-                raise RepositoryError(f"Corrupted commit object: {h}") from e
+        while queue1:
+            current = queue1.popleft()
+            commit = load_commit(self.objects_dir(), current)
 
-        while queues[1] or queues[2]:
-            side = 1 if (queues[1] and (not queues[2] or len(queues[1]) <= len(queues[2]))) else 2
-            if not queues[side]:
-                # other side still has work
-                side = 3 - side
-                if not queues[side]:
-                    break
+            parents = commit.parent
+            if parents is None:
+                parent_list = []
+            elif isinstance(parents, str):
+                parent_list = [parents]
+            else:
+                parent_list = list(parents)
 
-            current = queues[side].popleft()
+            for p in parent_list:
+                if p not in ancestors1:
+                    ancestors1.add(p)
+                    queue1.append(p)
 
-            # immediate meeting check (covers case where initial hashes overlap)
-            if current in visited[3 - side]:
+        # 2. BFS on hash2 to find the first match
+        queue2 = deque([hash2])
+        visited2 = {hash2}
+
+        while queue2:
+            current = queue2.popleft()
+            if current in ancestors1:
                 return current
 
-            for parent in _load_parents(current):
-                if parent in visited[3 - side]:
-                    return parent
-                if parent not in visited[side]:
-                    visited[side].add(parent)
-                    queues[side].append(parent)
+            commit = load_commit(self.objects_dir(), current)
+
+            parents = commit.parent
+            if parents is None:
+                parent_list = []
+            elif isinstance(parents, str):
+                parent_list = [parents]
+            else:
+                parent_list = list(parents)
+
+            for p in parent_list:
+                if p not in visited2:
+                    visited2.add(p)
+                    queue2.append(p)
 
         return None
 

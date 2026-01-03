@@ -628,31 +628,6 @@ class Repository:
 
         return top_level_diff.children
 
-    @requires_repo
-    def get_common_ancestor(self, hash1: str, hash2: str) -> str | None:
-        """
-        Find the lowest common ancestor (LCA) of two commits.
-
-        :param hash1: The hash of the first commit.
-        :param hash2: The hash of the second commit.
-        :return: The hash of the common ancestor, or None if no common ancestor is found.
-        :raises RuntimeError: If there is an error loading commits.
-        """
-        if hash1 == hash2:
-            return hash1
-
-        ancestors1 = set(_collect_ancestors(self.objects_dir(), hash1))
-
-        # Walk ancestors of hash2 and return the first match
-        current = hash2
-        while current:
-            if current in ancestors1:
-                return current
-            commit = load_commit(self.objects_dir(), current)
-            current = commit.parent
-
-        return None
-
     def head_file(self) -> Path:
         """Get the path to the HEAD file within the repository.
 
@@ -666,19 +641,3 @@ def branch_ref(branch: str) -> SymRef:
     :param branch: The name of the branch.
     :return: A SymRef object representing the branch reference."""
     return SymRef(f'{HEADS_DIR}/{branch}')
-
-
-def _collect_ancestors(objects_dir: Path, commit_hash: str) -> list[str]:
-    """Collect all ancestors of a commit including itself.
-
-    :param objects_dir: Path to the objects directory.
-    :param commit_hash: The hash of the commit to start from.
-    :return: A list of ancestor hashes.
-    """
-    ancestors = []
-    current = commit_hash
-    while current:
-        ancestors.append(current)
-        commit = load_commit(objects_dir, current)
-        current = commit.parent
-    return ancestors

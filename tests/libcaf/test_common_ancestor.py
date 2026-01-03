@@ -2,8 +2,9 @@ from pathlib import Path
 
 from pytest import raises
 
+from libcaf.merge import get_common_ancestor
 from libcaf.ref import HashRef
-from libcaf.repository import Repository, RepositoryError
+from libcaf.repository import Repository
 
 
 
@@ -12,7 +13,7 @@ def test_common_ancestor_same_commit(temp_repo: Repository) -> None:
     temp_file.write_text('content')
     c1 = temp_repo.commit_working_dir('Author', 'Commit 1')
     
-    assert temp_repo.get_common_ancestor(c1, c1) == c1
+    assert get_common_ancestor(temp_repo.objects_dir(), c1, c1) == c1
 
 def test_common_ancestor_parent_child(temp_repo: Repository) -> None:
     temp_file = temp_repo.working_dir / 'file.txt'
@@ -23,8 +24,8 @@ def test_common_ancestor_parent_child(temp_repo: Repository) -> None:
     temp_file.write_text('v2')
     c2 = temp_repo.commit_working_dir('Author', 'Commit 2')
     
-    assert temp_repo.get_common_ancestor(c1, c2) == c1
-    assert temp_repo.get_common_ancestor(c2, c1) == c1
+    assert get_common_ancestor(temp_repo.objects_dir(), c1, c2) == c1
+    assert get_common_ancestor(temp_repo.objects_dir(), c2, c1) == c1
 
 def test_common_ancestor_diverged(temp_repo: Repository) -> None:
     temp_file = temp_repo.working_dir / 'file.txt'
@@ -40,7 +41,7 @@ def test_common_ancestor_diverged(temp_repo: Repository) -> None:
     temp_file.write_text('b2')
     c2 = temp_repo.commit_working_dir('Author', 'Branch 2')
     
-    assert temp_repo.get_common_ancestor(c1, c2) == base
+    assert get_common_ancestor(temp_repo.objects_dir(), c1, c2) == base
 
 def test_common_ancestor_no_common(temp_repo: Repository) -> None:
     (temp_repo.working_dir / "a.txt").write_text("a")
@@ -54,11 +55,11 @@ def test_common_ancestor_no_common(temp_repo: Repository) -> None:
     (temp_repo.working_dir / "b.txt").write_text("b")
     c2 = temp_repo.commit_working_dir("Author", "2")
 
-    assert temp_repo.get_common_ancestor(c1, c2) is None
+    assert get_common_ancestor(temp_repo.objects_dir(), c1, c2) is None
 
 def test_common_ancestor_error(temp_repo: Repository) -> None:
     if temp_repo.exists():
         temp_repo.delete_repo()
     temp_repo.init()
     with raises(RuntimeError):
-        temp_repo.get_common_ancestor('1' * 40, '2' * 40)
+        get_common_ancestor(temp_repo.objects_dir(), '1' * 40, '2' * 40)

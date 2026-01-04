@@ -172,6 +172,14 @@ class Repository:
         return read_ref(head_file)
 
     @requires_repo
+    def update_head(self, new_ref: Ref) -> None:
+        """Update the HEAD reference of the repository.
+
+        :param new_ref: The new reference value to set.
+        :raises RepositoryNotFoundError: If the repository does not exist."""
+        write_ref(self.head_file(), new_ref)
+
+    @requires_repo
     def head_commit(self) -> HashRef | None:
         """Return a ref to the current commit reference of the HEAD.
 

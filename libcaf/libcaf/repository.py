@@ -475,6 +475,8 @@ class Repository:
 
         if branch:
             self.update_ref(branch, commit_ref)
+        else:
+            self.update_head(commit_ref)
 
         return commit_ref
 
@@ -633,6 +635,47 @@ class Repository:
 
         :return: The path to the HEAD file."""
         return self.repo_path() / HEAD_FILE
+
+    @requires_repo
+    def merge(self, target_ref: Ref) -> 'MergeResult':
+        """Merge a target reference into the current HEAD.
+
+        :param target_ref: The reference to merge into HEAD.
+        :return: A MergeResult indicating what kind of merge was performed.
+        :raises NotImplementedError: If a 3-way merge is required (not yet implemented).
+        :raises RepositoryNotFoundError: If the repository does not exist."""
+        from .merge import MergeResult, get_common_ancestor
+
+        head_commit = self.head_commit()
+        target_commit = self.resolve_ref(target_ref)
+
+        # Handle case where HEAD has no commits yet
+        if head_commit is None:
+            head_ref = self.head_ref()
+            if isinstance(head_ref, SymRef):
+                self.update_ref(head_ref, target_commit)
+            else:
+                self.update_head(target_commit)
+            return MergeResult.FAST_FORWARD
+
+        common_ancestor = get_common_ancestor(self.objects_dir(), str(head_commit), str(target_commit))
+
+        if common_ancestor is None:
+            return MergeResult.DISJOINT
+
+        if common_ancestor == str(target_commit):
+            return MergeResult.UP_TO_DATE
+
+        if common_ancestor == str(head_commit):
+            head_ref = self.head_ref()
+            if isinstance(head_ref, SymRef):
+                self.update_ref(head_ref, target_commit)
+            else:
+                self.update_head(target_commit)
+            return MergeResult.FAST_FORWARD
+
+        # Case 4: Diverged branches - need 3-way merge
+        raise NotImplementedError("3-way merge is not yet implemented")
 
 
 def branch_ref(branch: str) -> SymRef:

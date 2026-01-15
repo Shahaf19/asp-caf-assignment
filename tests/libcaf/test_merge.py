@@ -1,38 +1,32 @@
 """Tests for merge functionality."""
 
-from pathlib import Path
+import time
 
-from libcaf.merge import MergeResult, merge
+from libcaf import Commit
+from libcaf.merge import MergeResult, get_common_ancestor
+from libcaf.plumbing import hash_object, load_commit, save_commit
 from libcaf.ref import HashRef
 from libcaf.repository import Repository
 
 
-def test_merge_disjoint_returns_disjoint_and_head_unchanged(temp_repo: Repository) -> None:
-    """Case 1: Disjoint branches return DISJOINT and HEAD unchanged."""
+def test_merge_disjoint(temp_repo: Repository) -> None:
+    """Disjoint branches return DISJOINT and HEAD unchanged."""
     (temp_repo.working_dir / "a.txt").write_text("a")
-    commit_a = temp_repo.commit_working_dir("Author", "Commit A")
+    temp_repo.commit_working_dir("Author", "Commit A")
 
-    # Create isolated branch with no common ancestor
-    (temp_repo.repo_path() / "HEAD").write_text("ref: heads/isolated\n")
-    isolated_ref: Path = temp_repo.refs_dir() / "heads" / "isolated"
-    isolated_ref.parent.mkdir(parents=True, exist_ok=True)
-    isolated_ref.write_text("")
+    # Create a disconnected commit with no common ancestor
+    commit = Commit("tree_hash", "Author", "Disconnected", int(time.time()), None)
+    save_commit(temp_repo.objects_dir(), commit)
 
-    (temp_repo.working_dir / "b.txt").write_text("b")
-    commit_b = temp_repo.commit_working_dir("Author", "Commit B")
-
-    # Record HEAD before merge attempt
     head_before = temp_repo.head_commit()
-    result = merge(temp_repo, HashRef(commit_a))
+    result = temp_repo.merge(HashRef(hash_object(commit)))
 
     assert result == MergeResult.DISJOINT
-
-    # HEAD should remain unchanged
     assert temp_repo.head_commit() == head_before
 
 
-def test_merge_up_to_date_returns_up_to_date(temp_repo: Repository) -> None:
-    """Case 2: Merging an ancestor returns UP_TO_DATE and HEAD unchanged."""
+def test_merge_up_to_date(temp_repo: Repository) -> None:
+    """Merging an ancestor returns UP_TO_DATE and HEAD unchanged."""
     (temp_repo.working_dir / "file.txt").write_text("v1")
     root = temp_repo.commit_working_dir("Author", "Root commit")
 
@@ -40,14 +34,14 @@ def test_merge_up_to_date_returns_up_to_date(temp_repo: Repository) -> None:
     child = temp_repo.commit_working_dir("Author", "Child commit")
 
     head_before = temp_repo.head_commit()
-    result = merge(temp_repo, HashRef(root))
+    result = temp_repo.merge(HashRef(root))
 
     assert result == MergeResult.UP_TO_DATE
     assert temp_repo.head_commit() == head_before
 
 
-def test_merge_fast_forward_moves_head(temp_repo: Repository) -> None:
-    """Case 3: Fast-forward moves HEAD to target."""
+def test_merge_fast_forward(temp_repo: Repository) -> None:
+    """Fast-forward moves HEAD to target."""
     (temp_repo.working_dir / "file.txt").write_text("v1")
     root = temp_repo.commit_working_dir("Author", "Root commit")
 
@@ -55,31 +49,28 @@ def test_merge_fast_forward_moves_head(temp_repo: Repository) -> None:
     child = temp_repo.commit_working_dir("Author", "Child commit")
 
     temp_repo.update_head(HashRef(root))
-    assert temp_repo.head_commit() == root
-
-    # Merge child into current HEAD (root)
-    result = merge(temp_repo, HashRef(child))
+    result = temp_repo.merge(HashRef(child))
 
     assert result == MergeResult.FAST_FORWARD
     assert temp_repo.head_commit() == child
 
 
-def test_merge_three_way_returns_three_way(temp_repo: Repository) -> None:
-    """Case 4: Diverged branches return THREE_WAY."""
+def test_merge_three_way(temp_repo: Repository) -> None:
+    """Three-way merge creates a merge commit."""
     (temp_repo.working_dir / "file.txt").write_text("base")
     base = temp_repo.commit_working_dir("Author", "Base commit")
 
     (temp_repo.working_dir / "file.txt").write_text("left change")
     left = temp_repo.commit_working_dir("Author", "Left commit")
 
-    # Go back to base and create diverging commit
     temp_repo.update_head(HashRef(base))
     (temp_repo.working_dir / "file.txt").write_text("right change")
     right = temp_repo.commit_working_dir("Author", "Right commit")
 
     head_before = temp_repo.head_commit()
-    result = merge(temp_repo, HashRef(left))
+    result = temp_repo.merge(HashRef(left))
 
+    # HEAD should point to a new merge commit
     assert result == MergeResult.THREE_WAY
-    # HEAD should remain unchanged since merge wasn't actually performed
-    assert temp_repo.head_commit() == head_before
+    assert temp_repo.head_commit() != head_before
+    assert temp_repo.head_commit() != left

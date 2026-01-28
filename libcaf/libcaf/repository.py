@@ -12,7 +12,8 @@ from typing import Concatenate
 from . import Blob, Commit, Tree, TreeRecord, TreeRecordType
 from .constants import (DEFAULT_BRANCH, DEFAULT_REPO_DIR, HASH_CHARSET, HASH_LENGTH, HEADS_DIR, HEAD_FILE,
                         OBJECTS_SUBDIR, REFS_DIR, TAGS_DIR)
-from .plumbing import hash_object, load_commit, load_tree, save_commit, save_file_content, save_tree
+from .plumbing import hash_object, load_commit, load_tree, save_commit, save_file_content, save_tree, \
+    open_content_for_reading
 from .ref import HashRef, Ref, RefError, SymRef, read_ref, write_ref
 
 
@@ -644,7 +645,7 @@ class Repository:
         :return: A MergeResult indicating what kind of merge was performed.
         :raises NotImplementedError: If a 3-way merge is required (not yet implemented).
         :raises RepositoryNotFoundError: If the repository does not exist."""
-        from .merge import MergeResult, get_common_ancestor
+        from .merge import MergeConflictError, merge_trees, MergeResult , get_common_ancestor
 
         head_commit = self.head_commit()
         target_commit = self.resolve_ref(target_ref)
@@ -675,8 +676,72 @@ class Repository:
             return MergeResult.FAST_FORWARD
 
         # Case 4: Diverged branches - need 3-way merge
-        raise NotImplementedError("3-way merge is not yet implemented")
+        base_commit = load_commit(self.objects_dir(), HashRef(common_ancestor))
+        head_obj = load_commit(self.objects_dir(), head_commit)
+        target_obj = load_commit(self.objects_dir(), target_commit)
 
+        try:
+            merged_tree_hash = merge_trees(
+                repo=self,
+                base_h=base_commit.tree_hash,
+                target_h=head_obj.tree_hash,
+                source_h=target_obj.tree_hash,
+            )
+        except MergeConflictError as e:
+            msg = str(e).strip() or "Merge conflict"
+            raise MergeConflictError(msg) from e
+
+        # Create merge commit (single-parent model; record second parent in message)
+        author = 'merge'  # or wire through config/CLI input
+        message = (
+            f'Merge {target_commit} into {head_commit}\n'
+            f'\n'
+            f'Merge-base: {common_ancestor}\n'
+            f'Second-parent: {target_commit}\n'
+        )
+        merge_commit = Commit(
+            merged_tree_hash,
+            author,
+            message,
+            int(datetime.now().timestamp()),
+            head_commit,
+        )
+        merge_commit_ref = HashRef(hash_object(merge_commit))
+        save_commit(self.objects_dir(), merge_commit)
+
+        head_ref = self.head_ref()
+        if isinstance(head_ref, SymRef):
+            self.update_ref(head_ref, merge_commit_ref)
+        else:
+            self.update_head(merge_commit_ref)
+
+        # Clear working directory and check out merged tree
+        for p in self.working_dir.iterdir():
+            if p.name == self.repo_dir.name:
+                continue
+            if p.is_dir():
+                shutil.rmtree(p)
+            else:
+                p.unlink()
+
+        def _write_tree(tree_hash: str, out_dir: Path) -> None:
+            """Materialize a tree object into the filesystem under out_dir."""
+            tree = load_tree(self.objects_dir(), tree_hash)
+            records = tree.records if tree else {}
+
+            for name, rec in records.items():
+                dst = out_dir / name
+                if rec.type == TreeRecordType.TREE:
+                    dst.mkdir(parents=True, exist_ok=True)
+                    _write_tree(rec.hash, dst)
+                else:  # BLOB
+                    dst.parent.mkdir(parents=True, exist_ok=True)
+                    with open_content_for_reading(self.objects_dir(), rec.hash) as f:
+                        dst.write_bytes(f.read())
+
+        _write_tree(merged_tree_hash, self.working_dir)
+
+        return MergeResult.THREE_WAY
 
 def branch_ref(branch: str) -> SymRef:
     """Create a symbolic reference for a branch name.

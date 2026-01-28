@@ -7,6 +7,7 @@ libcaf/build/
 build/
 .caf
 libcaf/_libcaf.pyi
+.venv/
 
 assignment/artifacts/*
 !assignment/artifacts/asp26-assignment1.pdf
